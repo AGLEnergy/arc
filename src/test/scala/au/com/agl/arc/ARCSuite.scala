@@ -16,6 +16,7 @@ import org.apache.spark.ml.classification.LogisticRegression
 import org.apache.spark.ml.feature.{HashingTF, Tokenizer}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
+import org.opencypher.morpheus.api.MorpheusSession
 
 import au.com.agl.arc.util._
 import au.com.agl.arc.api._
@@ -55,6 +56,7 @@ class ARCSuite extends FunSuite with BeforeAndAfter {
     import spark.implicits._
     implicit val logger = LoggerFactory.getLogger(spark.sparkContext.applicationId)
     implicit val arcContext = ARCContext(jobId=None, jobName=None, environment="test", environmentId=None, configUri=None, isStreaming=false, ignoreEnvironments=false, lifecyclePlugins=Nil)
+    implicit val morpheus: MorpheusSession = MorpheusSession.create(spark)
 
     val dataset = TestDataUtils.getKnownDataset
     dataset.createOrReplaceTempView(inputView)

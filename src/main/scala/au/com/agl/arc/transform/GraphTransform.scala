@@ -14,7 +14,7 @@ import au.com.agl.arc.util._
 
 object GraphTransform {
 
-  def transform(transform: GraphTransform)(implicit spark: SparkSession, logger: au.com.agl.arc.util.log.logger.Logger): Option[DataFrame] = {
+  def transform(transform: GraphTransform)(implicit spark: SparkSession, logger: au.com.agl.arc.util.log.logger.Logger, morpheus: MorpheusSession): Option[DataFrame] = {
     val startTime = System.currentTimeMillis() 
     val stageDetail = new java.util.HashMap[String, Object]()
     stageDetail.put("type", transform.getType)
@@ -32,9 +32,6 @@ object GraphTransform {
       .map("stage", stageDetail)      
       .log()    
 
-      
-    implicit val morpheus: MorpheusSession = MorpheusSession.create(spark)
-    
     val graph = try {
       transform.source match {
         case Left((nodesView, relationshipsView, nodesType, relationshipsType)) => {
@@ -83,6 +80,9 @@ object GraphTransform {
       }
     }
 
+    // drop any existing graph with same name (like createOrReplaceTempView)
+    // will not throw error if does not exist
+    morpheus.catalog.dropGraph(transform.outputGraph)
     // put the graph into the catalog. will be named 'session.[outputGraph]'
     morpheus.catalog.store(transform.outputGraph, graph)
     

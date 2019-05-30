@@ -1710,6 +1710,42 @@ object ConfigUtils {
 
 
   // transform
+  def readCypherTransform(idx: Int, graph: Graph, name: StringConfigValue, params: Map[String, String])(implicit spark: SparkSession, logger: au.com.agl.arc.util.log.logger.Logger, c: Config): (Either[List[StageError], PipelineStage], Graph) = {
+    import ConfigReader._
+
+    var outputGraph = graph
+
+    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputURI" :: "outputView" :: "authentication" :: "persist" :: "cypherParams" :: "params" :: "numPartitions" :: "partitionBy" :: Nil
+    val invalidKeys = checkValidKeys(c)(expectedKeys)  
+
+    val description = getOptionalValue[String]("description")
+
+    val uriKey = "inputURI"
+    val inputURI = getValue[String](uriKey)
+    val parsedURI = inputURI.rightFlatMap(uri => parseURI(uriKey, uri))
+    val authentication = readAuthentication("authentication")  
+    val inputCypher = parsedURI.rightFlatMap{ uri => textContentForURI(uri, uriKey, authentication) }
+    val outputView = getValue[String]("outputView")
+    val persist = getValue[Boolean]("persist", default = Some(false))
+    val cypherParams = readMap("cypherParams", c)
+    val numPartitions = getOptionalValue[Int]("numPartitions")
+    val partitionBy = getValue[StringList]("partitionBy", default = Some(Nil))        
+
+    (name, description, parsedURI, inputCypher, outputView, persist, invalidKeys, numPartitions, partitionBy) match {
+      case (Right(n), Right(d), Right(uri), Right(cypher), Right(ov), Right(p), Right(_), Right(np), Right(pb)) => 
+
+        outputGraph = outputGraph.addVertex(Vertex(idx, ov))
+
+        // pass the unreplaced input sql not the 'valid sql' as the paramenters will be replaced when the stage is executed for testing
+        (Right(CypherTransform(n, d, uri, cypher, ov, params, cypherParams, p, np, pb)), outputGraph)
+      case _ =>
+        val allErrors: Errors = List(name, description, parsedURI, inputCypher, outputView, persist, invalidKeys, numPartitions, partitionBy).collect{ case Left(errs) => errs }.flatten
+        val stageName = stringOrDefault(name, "unnamed stage")
+        val err = StageError(idx, stageName, c.origin.lineNumber, allErrors)
+        (Left(err :: Nil), graph)
+    }
+  } 
+
   def readDiffTransform(idx: Int, graph: Graph, name: StringConfigValue, params: Map[String, String])(implicit spark: SparkSession, logger: au.com.agl.arc.util.log.logger.Logger, c: Config): (Either[List[StageError], PipelineStage], Graph) = {
     import ConfigReader._
 
@@ -2998,7 +3034,9 @@ object ConfigUtils {
           case Right("TextExtract") => readTextExtract(idx, graph, name, params)
           case Right("XMLExtract") => readXMLExtract(idx, graph, name, params)
 
+          case Right("CypherTransform") => readCypherTransform(idx, graph, name, params)
           case Right("DiffTransform") => readDiffTransform(idx, graph, name, params)
+          case Right("GraphTransform") => readGraphTransform(idx, graph, name, params)
           case Right("HTTPTransform") => readHTTPTransform(idx, graph, name, params)
           case Right("JSONTransform") => readJSONTransform(idx, graph, name, params)
           case Right("MetadataFilterTransform") => readMetadataFilterTransform(idx, graph, name, params)

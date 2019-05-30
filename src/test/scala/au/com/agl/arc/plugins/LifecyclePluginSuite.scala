@@ -7,6 +7,8 @@ import org.apache.spark.sql.SparkSession
 import org.scalatest.{BeforeAndAfter, FunSuite}
 
 import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.opencypher.morpheus.api.MorpheusSession
+
 import au.com.agl.arc.ARC
 import au.com.agl.arc.api.API._
 import au.com.agl.arc.util.Utils
@@ -37,7 +39,9 @@ class LifecyclePluginSuite extends FunSuite with BeforeAndAfter {
   test("Read and execute config with lifecycle configuration plugin") {
     implicit val spark = session
     implicit val logger = LoggerFactory.getLogger(spark.sparkContext.applicationId)
-    val arcContext = ARCContext(jobId=None, jobName=None, environment="test", environmentId=None, configUri=None, isStreaming=false, ignoreEnvironments=false, lifecyclePlugins=Nil)
+    implicit val arcContext = ARCContext(jobId=None, jobName=None, environment="test", environmentId=None, configUri=None, isStreaming=false, ignoreEnvironments=false, lifecyclePlugins=Nil)
+    implicit val morpheus: MorpheusSession = MorpheusSession.create(spark)
+
     import spark.implicits._
 
     val argsMap = collection.mutable.HashMap[String, String]()
@@ -49,7 +53,7 @@ class LifecyclePluginSuite extends FunSuite with BeforeAndAfter {
 
     pipelineEither match {
       case Left(_) => assert(false)
-      case Right((pipeline, _, arcCtx)) => ARC.run(pipeline)(spark, logger, arcCtx)
+      case Right((pipeline, _, arcCtx)) => ARC.run(pipeline)(spark, logger, arcCtx, morpheus)
     } 
     
     val expectedBefore = Seq(("delimited extract", "before", "testValue")).toDF("stage","when","message")

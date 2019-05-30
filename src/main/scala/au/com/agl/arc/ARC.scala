@@ -18,6 +18,8 @@ object ARC {
 
   import org.apache.spark.sql._
   import org.apache.spark.sql.types._
+  
+  import org.opencypher.morpheus.api.MorpheusSession
 
   import au.com.agl.arc.api.API._
   import au.com.agl.arc.util._
@@ -110,6 +112,7 @@ object ARC {
 
 
     import spark.implicits._
+    implicit val morpheus: MorpheusSession = MorpheusSession.create(spark)
 
     // add spark config to log
     val sparkConf = new java.util.HashMap[String, String]()
@@ -251,7 +254,7 @@ object ARC {
       case Right( (pipeline, _, arcCtx) ) =>
         try {
           UDF.registerUDFs(spark.sqlContext)
-          ARC.run(pipeline)(spark, logger, arcCtx)
+          ARC.run(pipeline)(spark, logger, arcCtx, morpheus)
           false
         } catch {
           case e: Exception with DetailException => 
@@ -370,7 +373,7 @@ object ARC {
     * engines as the submitted stages are not specific to Spark.
     */
   def run(pipeline: ETLPipeline)
-  (implicit spark: SparkSession, logger: au.com.agl.arc.util.log.logger.Logger, arcContext: ARCContext): Option[DataFrame] = {
+  (implicit spark: SparkSession, logger: au.com.agl.arc.util.log.logger.Logger, arcContext: ARCContext, morpheus: MorpheusSession): Option[DataFrame] = {
 
     def before(stage: PipelineStage): Unit = {
       for (p <- arcContext.lifecyclePlugins) {
@@ -406,7 +409,7 @@ object ARC {
     runStages(pipeline.stages)
   }
 
-  def processStage(stage: PipelineStage)(implicit spark: SparkSession, logger: au.com.agl.arc.util.log.logger.Logger, arcContext: ARCContext): Option[DataFrame] = {
+  def processStage(stage: PipelineStage)(implicit spark: SparkSession, logger: au.com.agl.arc.util.log.logger.Logger, arcContext: ARCContext, morpheus: MorpheusSession): Option[DataFrame] = {
     stage match {
       case e : AvroExtract =>
         extract.AvroExtract.extract(e)  
@@ -441,8 +444,12 @@ object ARC {
       case e : XMLExtract =>
         extract.XMLExtract.extract(e)
 
+      case t : CypherTransform =>
+        transform.CypherTransform.transform(t)
       case t : DiffTransform =>
         transform.DiffTransform.transform(t)
+      case t : GraphTransform =>
+        transform.GraphTransform.transform(t) 
       case t : HTTPTransform =>
         transform.HTTPTransform.transform(t)          
       case t : JSONTransform =>

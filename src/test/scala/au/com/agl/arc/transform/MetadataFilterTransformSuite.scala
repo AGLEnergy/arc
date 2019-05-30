@@ -13,6 +13,7 @@ import org.apache.spark.ml.classification.LogisticRegression
 import org.apache.spark.ml.feature.{HashingTF, Tokenizer}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
+import org.opencypher.morpheus.api.MorpheusSession
 
 import au.com.agl.arc.api._
 import au.com.agl.arc.api.API._
@@ -59,6 +60,7 @@ class MetadataFilterTransformSuite extends FunSuite with BeforeAndAfter {
     implicit val spark = session
     implicit val logger = LoggerFactory.getLogger(spark.sparkContext.applicationId)
     implicit val arcContext = ARCContext(jobId=None, jobName=None, environment="test", environmentId=None, configUri=None, isStreaming=false, ignoreEnvironments=false, lifecyclePlugins=Nil)
+    implicit val morpheus: MorpheusSession = MorpheusSession.create(spark)
 
     // load csv
     val extractDataset = spark.read.csv(targetFile)
@@ -108,7 +110,7 @@ class MetadataFilterTransformSuite extends FunSuite with BeforeAndAfter {
 
     pipelineEither match {
       case Left(_) => assert(false)
-      case Right((pipeline, _, _)) => ARC.run(pipeline)(spark, logger, arcContext)
+      case Right((pipeline, _, _)) => ARC.run(pipeline)
     }  
   }  
 

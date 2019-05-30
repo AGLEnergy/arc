@@ -250,6 +250,8 @@ object API {
     def persist: Boolean
   }
 
+  case class CypherTransform(name: String, description: Option[String], inputURI: URI, cypher: String, outputView:String, params: Map[String, String], cypherParams: Map[String, String], persist: Boolean, numPartitions: Option[Int], partitionBy: List[String]) extends PersistableTransform { val getType = "CypherTransform" }
+
   case class DiffTransform(name: String, description: Option[String], inputLeftView: String, inputRightView: String, outputIntersectionView: Option[String], outputLeftView: Option[String], outputRightView: Option[String], params: Map[String, String], persist: Boolean) extends PersistableTransform { val getType = "DiffTransform" }
 
   case class GraphTransform(name: String, description: Option[String], source: Either[(String, String, String, String), String], outputGraph: String, params: Map[String, String], persist: Boolean) extends PersistableTransform { val getType = "GraphTransform" }
