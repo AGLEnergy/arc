@@ -1742,6 +1742,58 @@ object ConfigUtils {
     }
   } 
 
+  def readGraphTransform(idx: Int, graph: Graph, name: StringConfigValue, params: Map[String, String])(implicit spark: SparkSession, logger: au.com.agl.arc.util.log.logger.Logger, c: Config): (Either[List[StageError], PipelineStage], Graph) = {
+    import ConfigReader._
+
+    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "nodesView" :: "relationshipsView" :: "nodesType" :: "relationshipsType" :: "authentication" :: "inputURI" :: "outputGraph" :: "persist" :: "params" :: Nil
+    val invalidKeys = checkValidKeys(c)(expectedKeys)  
+
+    val description = getOptionalValue[String]("description")
+
+    // the cypher path
+    val uriKey = "inputURI"
+    val inputURI = getValue[String](uriKey)
+    val parsedURI = inputURI.rightFlatMap(uri => parseURI(uriKey, uri))
+    val authentication = readAuthentication("authentication")
+    val inputCypher = parsedURI.rightFlatMap { uri =>
+        authentication.right.map(auth => CloudUtils.setHadoopConfiguration(auth))  
+        getBlob(uriKey, uri)
+    }
+
+    // the dataframe path
+    val nodesView = if(!c.hasPath("inputURI")) getValue[String]("nodesView") else Right("")
+    val relationshipsView = if(!c.hasPath("inputURI")) getValue[String]("relationshipsView") else Right("")
+    val nodesType = if(!c.hasPath("inputURI")) getValue[String]("nodesType") else Right("")
+    val relationshipsType = if(!c.hasPath("inputURI")) getValue[String]("relationshipsType") else Right("")
+
+    // the rest
+    val outputGraph = getValue[String]("outputGraph")
+    val persist = getValue[Boolean]("persist", default = Some(false))
+
+    (name, description, inputURI, inputCypher, nodesView, relationshipsView, nodesType, relationshipsType, outputGraph, persist, invalidKeys) match {
+      case (Right(n), Right(d), Right(_), Right(cypher), Right(nv), Right(rv), Right(nt), Right(rt), Right(og), Right(p), Right(_)) => 
+
+        var dependencyGraph = graph
+        // add the vertices
+        dependencyGraph = dependencyGraph.addVertex(Vertex(idx, og))
+        // add the edges
+        val source = if(!c.hasPath("inputURI")) {
+          dependencyGraph = dependencyGraph.addEdge(nv, og)
+          dependencyGraph = dependencyGraph.addEdge(rv, og)
+          Left(nv, rv, nt, rt)
+        } else {
+          Right(cypher)
+        }
+
+        (Right(GraphTransform(n, d, source, og, params, p)), dependencyGraph)
+      case _ =>
+        val allErrors: Errors = List(name, description, inputURI, inputCypher, nodesView, relationshipsView, nodesType, relationshipsType, outputGraph, persist, invalidKeys).collect{ case Left(errs) => errs }.flatten
+        val stageName = stringOrDefault(name, "unnamed stage")
+        val err = StageError(idx, stageName, c.origin.lineNumber, allErrors)
+        (Left(err :: Nil), graph)
+    }
+  }
+
   def readHTTPTransform(idx: Int, graph: Graph, name: StringConfigValue, params: Map[String, String])(implicit spark: SparkSession, logger: au.com.agl.arc.util.log.logger.Logger, c: Config): (Either[List[StageError], PipelineStage], Graph) = {
     import ConfigReader._
 
