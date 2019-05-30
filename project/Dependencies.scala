@@ -63,6 +63,9 @@ object Dependencies {
   // elasticsearch
   val elasticsearch = "org.elasticsearch" % "elasticsearch-hadoop" % "7.0.1" % includeJars
 
+  // morhpeus
+  val morpheus = "org.opencypher" % "morpheus-spark-cypher" % "0.4.1" % includeJars
+
   // Project
   val etlDeps = Seq(
     sparkCore,
@@ -87,6 +90,7 @@ object Dependencies {
     sparkAvro,
     azureEventHub,
     qpid,
-    elasticsearch
+    elasticsearch,
+    morpheus
   )
 }
